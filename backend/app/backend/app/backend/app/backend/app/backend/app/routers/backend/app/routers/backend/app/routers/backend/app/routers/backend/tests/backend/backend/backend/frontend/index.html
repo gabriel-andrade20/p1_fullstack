@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini E-commerce</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: sans-serif;
+      background: #f4f4f4;
+      color: #333;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: white;
+      padding: 16px 32px;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 32px auto;
+      padding: 0 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    h2 {
+      margin-bottom: 16px;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #555;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    button {
+      background: #1a1a2e;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      width: 100%;
+      margin-top: 4px;
+    }
+
+    button:hover { background: #16213e; }
+
+    .btn-add {
+      background: #0f3460;
+      margin-bottom: 8px;
+    }
+
+    .btn-danger {
+      background: #c0392b;
+      width: auto;
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+
+    .item-lista {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+
+    .total {
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 12px;
+      color: #1a1a2e;
+    }
+
+    .mensagem {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .sucesso { background: #d4edda; color: #155724; }
+    .erro { background: #f8d7da; color: #721c24; }
+
+    .pedidos-lista { margin-top: 8px; }
+
+    .pedido-item {
+      border: 1px solid #eee;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    .pedido-item strong { display: block; margin-bottom: 4px; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .badge-aberto { background: #fff3cd; color: #856404; }
+    .badge-fechado { background: #d4edda; color: #155724; }
+  </style>
+</head>
+<body>
+
+<header>🛒 Mini E-commerce</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2>Montar Pedido</h2>
+
+    <input type="text" id="cliente-nome" placeholder="Nome do cliente">
+
+    <select id="produto-select">
+      <option value="">Carregando produtos...</option>
+    </select>
+
+    <input type="number" id="quantidade" placeholder="Quantidade" min="1" value="1">
+
+    <button class="btn-add" onclick="adicionarItem()">+ Adicionar Item</button>
+
+    <div id="itens-carrinho"></div>
+
+    <input type="text" id="cupom" placeholder="Cupom de desconto (opcional)">
+
+    <div class="total" id="total-display">Total: R$ 0,00</div>
+
+    <button onclick="finalizarPedido()">Finalizar Pedido</button>
+
+    <div class="mensagem" id="msg-pedido"></div>
+  </div>
+
+  <div class="card">
+    <h2>Pedidos Realizados</h2>
+    <button onclick="carregarPedidos()" style="margin-bottom:16px">Atualizar</button>
+    <div class="pedidos-lista" id="pedidos-lista">Nenhum pedido ainda.</div>
+  </div>
+
+</div>
+
+<script>
+  const API = "http://localhost:8000"
+  let carrinho = []
+  let produtos = []
+
+  async function carregarProdutos() {
+    const res = await fetch(`${API}/produtos/`)
+    produtos = await res.json()
+    const sel = document.getElementById("produto-select")
+    sel.innerHTML = produtos.length
+      ? produtos.map(p => `<option value="${p.id}" data-preco="${p.preco}">${p.nome} - R$ ${p.preco.toFixed(2)} (estoque: ${p.estoque})</option>`).join("")
+      : `<option>Nenhum produto cadastrado</option>`
+  }
+
+  function adicionarItem() {
+    const sel = document.getElementById("produto-select")
+    const qty = parseInt(document.getElementById("quantidade").value)
+    const produtoId = parseInt(sel.value)
+    const preco = parseFloat(sel.selectedOptions[0]?.dataset.preco || 0)
+    const nome = sel.selectedOptions[0]?.text || ""
+
+    if (!produtoId || qty < 1) return
+
+    const existente = carrinho.find(i => i.produto_id === produtoId)
+    if (existente) {
+      existente.quantidade += qty
+    } else {
+      carrinho.push({ produto_id: produtoId, quantidade: qty, nome, preco })
+    }
+
+    renderCarrinho()
+  }
+
+  function removerItem(produtoId) {
+    carrinho = carrinho.filter(i => i.produto_id !== produtoId)
+    renderCarrinho()
+  }
+
+  function renderCarrinho() {
+    const div = document.getElementById("itens-carrinho")
+    if (!carrinho.length) {
+      div.innerHTML = "<p style='color:#aaa;font-size:13px;margin:8px 0'>Nenhum item adicionado</p>"
+      document.getElementById("total-display").textContent = "Total: R$ 0,00"
+      return
+    }
+
+    let total = 0
+    div.innerHTML = carrinho.map(item => {
+      const subtotal = item.preco * item.quantidade
+      total += subtotal
+      return `<div class="item-lista">
+        <span>${item.nome} x${item.quantidade}</span>
+        <span>R$ ${subtotal.toFixed(2)} <button class="btn-danger" onclick="removerItem(${item.produto_id})">✕</button></span>
+      </div>`
+    }).join("")
+
+    document.getElementById("total-display").textContent = `Total: R$ ${total.toFixed(2)}`
+  }
+
+  async function finalizarPedido() {
+    const nome = document.getElementById("cliente-nome").value.trim()
+    const cupom = document.getElementById("cupom").value.trim()
+    const msg = document.getElementById("msg-pedido")
+
+    if (!nome || !carrinho.length) {
+      mostrarMsg(msg, "Preencha o nome e adicione ao menos um item.", false)
+      return
+    }
+
+    const body = {
+      cliente_nome: nome,
+      itens: carrinho.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade }))
+    }
+
+    if (cupom) body.cupom_codigo = cupom
+
+    const res = await fetch(`${API}/pedidos/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    })
+
+    const data = await res.json()
+
+    if (res.ok) {
+      mostrarMsg(msg, `Pedido #${data.id} criado! Total: R$ ${data.total.toFixed(2)}`, true)
+      carrinho = []
+      renderCarrinho()
+      document.getElementById("cliente-nome").value = ""
+      document.getElementById("cupom").value = ""
+      carregarProdutos()
+      carregarPedidos()
+    } else {
+      mostrarMsg(msg, data.detail || "Erro ao criar pedido.", false)
+    }
+  }
+
+  async function carregarPedidos() {
+    const res = await fetch(`${API}/pedidos/`)
+    const pedidos = await res.json()
+    const div = document.getElementById("pedidos-lista")
+
+    if (!pedidos.length) {
+      div.innerHTML = "Nenhum pedido ainda."
+      return
+    }
+
+    div.innerHTML = pedidos.slice().reverse().map(p => `
+      <div class="pedido-item">
+        <strong>#${p.id} — ${p.cliente_nome}</strong>
+        <span class="badge badge-${p.status}">${p.status}</span>
+        <div style="margin-top:6px">
+          ${p.itens.map(i => `<div>• Produto ${i.produto_id} × ${i.quantidade} = R$ ${(i.preco_unitario * i.quantidade).toFixed(2)}</div>`).join("")}
+        </div>
+        <div style="margin-top:8px;font-weight:bold">Total: R$ ${p.total.toFixed(2)}</div>
+      </div>
+    `).join("")
+  }
+
+  function mostrarMsg(el, texto, sucesso) {
+    el.textContent = texto
+    el.className = `mensagem ${sucesso ? "sucesso" : "erro"}`
+    el.style.display = "block"
+    setTimeout(() => el.style.display = "none", 4000)
+  }
+
+  carregarProdutos()
+  carregarPedidos()
+</script>
+
+</body>
+</html>
